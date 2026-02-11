@@ -18,7 +18,18 @@ def llegeix_vocabulari(nom_fitxer: str) -> List[str]:
             considerar per obtenir la representació BoW. Cada element de la
             llista és una paraula del vocabulari
     """
-
+    v = []
+    try:
+        f = open(nom_fitxer, 'r')
+    except FileNotFoundError:
+        raise FileNotFoundError("Fitxer de VOCAB No trobat")
+    else:
+        v = []
+        for line in f:
+            line.strip()
+            v.append(line[:-1])
+        f.close()
+        return v
 
 def crea_bow(nom_fitxer: str, vocabulari: List[str]) -> Dict[str, int]:
     """
@@ -39,6 +50,28 @@ def crea_bow(nom_fitxer: str, vocabulari: List[str]) -> Dict[str, int]:
             paraula apareix al missatge
     """
 
+    d = {}
+    try:
+        missatge = open(nom_fitxer, 'r')
+    except FileNotFoundError:
+        raise FileNotFoundError("Fitxer de missatge no trobat")
+    else:
+        d = {}
+
+        for p in vocabulari:
+            d[p] = 0
+
+        for line in missatge:
+            line = line.lower()
+            line = re.sub(("^[^a-zA-Z0-9]"), " ", line)
+            tokens = line.split()
+
+            for t in tokens:
+                if t in vocabulari:
+                    d[t] = d[t] + 1
+
+        return d
+
 
 def compara_bow(bow1: Dict[str, int], bow2: Dict[str, int]) -> float:
     """
@@ -52,6 +85,15 @@ def compara_bow(bow1: Dict[str, int], bow2: Dict[str, int]) -> float:
         distancia: float
             Valor de la distància entre les dues representacions BoW
     """
+
+    distancia = 0
+    for k in bow1:
+        if k in bow2:
+            distancia = distancia + min(bow1[k], bow2[k])
+    distancia /= min(sum(bow1.values()), sum(bow2.values()))
+    return distancia
+
+
 
 
 def crea_conjunt_entrenament(train: str, vocabulari: List[str]) -> List:
@@ -77,6 +119,14 @@ def crea_conjunt_entrenament(train: str, vocabulari: List[str]) -> List:
             amb la representació BoW del missatge i un booleà que ens indica
             si el missatge és spam (True) o no (False)
     """
+
+    l = []
+    for fitxer in os.listdir(train):
+        if re.search('spm', fitxer):
+            l.append((fitxer, crea_bow(os.path.join(train, fitxer), vocabulari), True))
+        else:
+            l.append((fitxer, crea_bow(os.path.join(train, fitxer), vocabulari), False))
+    return l
 
 
 def classifica_document(nom_fitxer: str, training_set: List,
@@ -107,6 +157,24 @@ def classifica_document(nom_fitxer: str, training_set: List,
             de la classificació
     """
 
+    t = tuple([bool, list[float]])
+    bow = crea_bow(nom_fitxer, vocabulari)
+    distancies = []
+    
+    for i in range(len(training_set)):
+        distancies.append(compara_bow(bow, training_set[i][1]))
+
+    distancies.sort()
+    distancies = distancies[:k]
+
+    if sum(distancies) > k/2:
+        t = (True, distancies)
+    else:
+        t = (False, distancies)
+
+    return t
+
+
 
 def deteccio_spam(train: str, test: str, fitxer_vocabulari: str, k) -> List:
     """
@@ -136,3 +204,11 @@ def deteccio_spam(train: str, test: str, fitxer_vocabulari: str, k) -> List:
             distàncies que s'han tingunt en compte per determinar el resultat
             de la classificació
     """
+
+    l = [str, bool, list[float]]
+    training_set = crea_conjunt_entrenament(train, fitxer_vocabulari)
+    vocabulari = llegeix_vocabulari(fitxer_vocabulari)
+
+    for fitxer in os.listdir(test):
+        l.append(classifica_document(os.path.join(test, fitxer), training_set, vocabulari, k))
+    return l
